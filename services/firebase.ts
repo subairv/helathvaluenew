@@ -37,15 +37,26 @@ export const signOutUser = (): Promise<void> => {
 // Customer Management
 export const getCustomers = async (userId: string): Promise<Customer[]> => {
     const customersColRef = collection(db, 'users', userId, 'customers');
-    const q = query(customersColRef, orderBy('name'));
+    const q = query(customersColRef, orderBy('lastName'), orderBy('firstName'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
 };
 
-export const addCustomer = async (userId: string, name: string): Promise<string> => {
-    const customersColRef = collection(db, 'users', userId, 'customers');
-    const docRef = await addDoc(customersColRef, { name });
-    return docRef.id;
+export const saveCustomer = async (userId: string, customer: Omit<Partial<Customer>, 'id'> & { id?: string }): Promise<string> => {
+    if (customer.id) {
+        const customerId = customer.id;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, ...customerData } = customer;
+        const customerDocRef = doc(db, 'users', userId, 'customers', customerId);
+        await setDoc(customerDocRef, customerData, { merge: true });
+        return customerId;
+    } else {
+        const customersColRef = collection(db, 'users', userId, 'customers');
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, ...customerData } = customer;
+        const docRef = await addDoc(customersColRef, customerData);
+        return docRef.id;
+    }
 };
 
 export const deleteCustomer = async (userId: string, customerId: string): Promise<void> => {
@@ -67,9 +78,29 @@ export const deleteCustomer = async (userId: string, customerId: string): Promis
 
 
 // Health Record Management (now customer-specific)
-export const saveHealthData = async (userId: string, customerId: string, date: string, data: HealthData): Promise<void> => {
-  const docRef = doc(db, 'users', userId, 'customers', customerId, 'healthRecords', date);
-  await setDoc(docRef, data, { merge: true });
+export const saveHealthData = async (userId: string, customerId: string, date: string, data: HealthData, customer: Customer): Promise<void> => {
+    const isToday = new Date().toISOString().split('T')[0] === date;
+
+    const batch = writeBatch(db);
+
+    const recordDocRef = doc(db, 'users', userId, 'customers', customerId, 'healthRecords', date);
+    batch.set(recordDocRef, data, { merge: true });
+    
+    const customerHasChanged = data.weight !== customer.currentWeightKg || data.height !== customer.heightCm;
+
+    if (isToday && customerHasChanged) {
+        const customerDocRef = doc(db, 'users', userId, 'customers', customerId);
+        const customerUpdate: Partial<Customer> = {};
+        if (data.weight !== undefined) {
+            customerUpdate.currentWeightKg = data.weight;
+        }
+        if (data.height !== undefined) {
+            customerUpdate.heightCm = data.height;
+        }
+        batch.update(customerDocRef, customerUpdate);
+    }
+    
+    await batch.commit();
 };
 
 export const getHealthDataForDate = async (userId: string, customerId: string, date: string): Promise<HealthData | null> => {

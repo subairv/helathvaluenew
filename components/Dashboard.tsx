@@ -5,13 +5,14 @@ import {
     getAllHealthRecords, 
     deleteHealthRecord,
     getCustomers,
-    addCustomer,
+    saveCustomer,
     deleteCustomer
 } from '../services/firebase';
 import type { User, HealthData, HealthMetricKey, HealthRecord, Customer } from '../types';
 import { MetricStatus } from '../types';
 import { METRIC_CONFIGS, STATUS_COLORS } from '../constants';
 import MetricCard from './MetricCard';
+import CustomerModal from './CustomerModal';
 import LogoutIcon from './icons/LogoutIcon';
 import SaveIcon from './icons/SaveIcon';
 import CheckIcon from './icons/CheckIcon';
@@ -20,12 +21,13 @@ import PlusIcon from './icons/PlusIcon';
 import DeleteIcon from './icons/DeleteIcon';
 import UserIcon from './icons/UserIcon';
 import PrintIcon from './icons/PrintIcon';
+import EditIcon from './icons/EditIcon';
 
 interface DashboardProps {
   user: User;
 }
 
-const Dashboard: React.FC = ({ user }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   // Global state
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [formData, setFormData] = useState<HealthData>({});
@@ -37,6 +39,8 @@ const Dashboard: React.FC = ({ user }) => {
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null);
   const [isCustomersLoading, setIsCustomersLoading] = useState(true);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<(Omit<Partial<Customer>, 'id'> & { id?: string }) | null>(null);
 
   // Record state
   const [customerRecords, setCustomerRecords] = useState<HealthRecord[]>([]);
@@ -49,14 +53,21 @@ const Dashboard: React.FC = ({ user }) => {
 
 
   // Fetch all customers for the user
-  const fetchCustomers = useCallback(async () => {
+  const fetchCustomers = useCallback(async (newlySelectedId: string | null = null) => {
     if (!user) return;
     setIsCustomersLoading(true);
     const customerList = await getCustomers(user.uid);
     setCustomers(customerList);
-    if (customerList.length > 0 && !activeCustomer) {
+
+    if (newlySelectedId) {
+        setActiveCustomer(customerList.find(c => c.id === newlySelectedId) || null);
+    } else if (!activeCustomer && customerList.length > 0) {
         setActiveCustomer(customerList[0]);
+    } else if (activeCustomer) {
+        // Refresh active customer data
+        setActiveCustomer(customerList.find(c => c.id === activeCustomer.id) || null);
     }
+
     setIsCustomersLoading(false);
   }, [user, activeCustomer]);
 
@@ -85,7 +96,11 @@ const Dashboard: React.FC = ({ user }) => {
     if(selectedRecord) {
         setFormData(selectedRecord);
     } else {
-        setFormData({ customerName: activeCustomer?.name || '' });
+        setFormData({ 
+            customerName: `${activeCustomer?.firstName} ${activeCustomer?.lastName}`,
+            height: activeCustomer?.heightCm,
+            weight: activeCustomer?.currentWeightKg
+         });
     }
   }, [selectedDate, customerRecords, activeCustomer]);
   
@@ -113,7 +128,7 @@ const Dashboard: React.FC = ({ user }) => {
     
     const dataToSave: HealthData = {
         ...formData,
-        customerName: activeCustomer.name,
+        customerName: `${activeCustomer.firstName} ${activeCustomer.lastName}`,
         bmi: bmi,
         lastUpdated: new Date().toISOString(),
     };
@@ -123,12 +138,13 @@ const Dashboard: React.FC = ({ user }) => {
     );
 
     try {
-        await saveHealthData(user.uid, activeCustomer.id, selectedDate, dataToSave);
+        await saveHealthData(user.uid, activeCustomer.id, selectedDate, dataToSave, activeCustomer);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
-        // Refresh records for current customer
+        // Refresh records and customer data (for weight/height updates)
         const records = await getAllHealthRecords(user.uid, activeCustomer.id);
         setCustomerRecords(records);
+        await fetchCustomers(activeCustomer.id); // Re-fetch customers to get updated profile
     } catch (error) {
         console.error("Error saving data: ", error);
         alert('Failed to save data.');
@@ -136,27 +152,34 @@ const Dashboard: React.FC = ({ user }) => {
         setIsSaving(false);
     }
   };
-
-  const handleAddNewCustomer = async () => {
-    const name = window.prompt("Enter new customer's name:");
-    if (name && user) {
-        try {
-            await addCustomer(user.uid, name);
-            await fetchCustomers();
-        } catch (error) {
-            console.error("Error adding customer:", error);
-            alert("Failed to add customer.");
-        }
+  
+  const handleSaveCustomer = async (customer: Omit<Partial<Customer>, 'id'> & { id?: string }) => {
+    if (!user) return;
+    try {
+        const savedCustomerId = await saveCustomer(user.uid, customer);
+        setIsCustomerModalOpen(false);
+        setEditingCustomer(null);
+        await fetchCustomers(customer.id ? customer.id : savedCustomerId);
+    } catch(error) {
+        console.error("Error saving customer:", error);
+        alert("Failed to save customer.");
     }
   };
 
+  const handleAddNewCustomer = () => {
+    setEditingCustomer(null);
+    setIsCustomerModalOpen(true);
+  };
+
   const handleDeleteCustomer = async (customer: Customer) => {
-      if (!user || !window.confirm(`Are you sure you want to delete ${customer.name} and all their records? This action cannot be undone.`)) return;
+      if (!user || !window.confirm(`Are you sure you want to delete ${customer.firstName} ${customer.lastName} and all their records? This action cannot be undone.`)) return;
       try {
-          await deleteCustomer(user.uid, customer.id);
-          setCustomers(customers.filter(c => c.id !== customer.id));
-          if (activeCustomer?.id === customer.id) {
-              setActiveCustomer(customers.length > 1 ? customers.filter(c => c.id !== customer.id)[0] : null);
+          const customerIdToDelete = customer.id;
+          await deleteCustomer(user.uid, customerIdToDelete);
+          const remainingCustomers = customers.filter(c => c.id !== customerIdToDelete)
+          setCustomers(remainingCustomers);
+          if (activeCustomer?.id === customerIdToDelete) {
+              setActiveCustomer(remainingCustomers.length > 0 ? remainingCustomers[0] : null);
           }
       } catch (error) {
           console.error("Error deleting customer:", error);
@@ -172,7 +195,11 @@ const Dashboard: React.FC = ({ user }) => {
   const handleNewRecord = () => {
     const today = new Date().toISOString().split('T')[0];
     setSelectedDate(today);
-    setFormData({ customerName: activeCustomer?.name || '' });
+    setFormData({ 
+      customerName: activeCustomer ? `${activeCustomer.firstName} ${activeCustomer.lastName}` : '',
+      height: activeCustomer?.heightCm,
+      weight: activeCustomer?.currentWeightKg,
+    });
   };
 
   const handleDeleteRecord = async (date: string) => {
@@ -193,7 +220,7 @@ const Dashboard: React.FC = ({ user }) => {
   const filteredCustomers = useMemo(() => {
     if (!customerSearchTerm) return customers;
     return customers.filter(c => 
-        c.name.toLowerCase().includes(customerSearchTerm.toLowerCase())
+        `${c.firstName} ${c.lastName}`.toLowerCase().includes(customerSearchTerm.toLowerCase())
     );
   }, [customers, customerSearchTerm]);
 
@@ -220,7 +247,7 @@ const Dashboard: React.FC = ({ user }) => {
         <html lang="en">
         <head>
             <meta charset="UTF-8">
-            <title>Health Report for ${customer.name}</title>
+            <title>Health Report for ${customer.firstName} ${customer.lastName}</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <style>
                 body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -232,7 +259,7 @@ const Dashboard: React.FC = ({ user }) => {
             </style>
         </head>
         <body class="p-6">
-            <h1 class="text-3xl font-bold mb-2">Health Report: ${customer.name}</h1>
+            <h1 class="text-3xl font-bold mb-2">Health Report: ${customer.firstName} ${customer.lastName}</h1>
             <p class="text-gray-600 mb-4">Report for period: <strong>${startDate}</strong> to <strong>${endDate}</strong></p>
             <p class="text-sm text-gray-500 mb-6">Generated on: ${new Date().toLocaleDateString()}</p>
             <table class="w-full border-collapse text-left">
@@ -280,6 +307,12 @@ const Dashboard: React.FC = ({ user }) => {
 
   return (
     <div className="min-h-screen bg-brand-dark text-brand-light p-4 md:p-8">
+      <CustomerModal 
+        isOpen={isCustomerModalOpen}
+        onClose={() => { setIsCustomerModalOpen(false); setEditingCustomer(null); }}
+        onSave={handleSaveCustomer}
+        customer={editingCustomer}
+      />
       <header className="flex justify-between items-center mb-6">
         <div className="flex items-center space-x-4">
           <img src={user.photoURL || ''} alt="User" className="w-12 h-12 rounded-full border-2 border-brand-accent" />
@@ -321,9 +354,9 @@ const Dashboard: React.FC = ({ user }) => {
                       {filteredCustomers.map(customer => (
                         <li key={customer.id} className={`p-3 rounded-lg flex justify-between items-center transition-colors ${activeCustomer?.id === customer.id ? 'bg-brand-accent/30' : 'bg-gray-700 hover:bg-gray-600'}`}>
                           <div onClick={() => setActiveCustomer(customer)} className="flex-grow cursor-pointer">
-                            <p className="font-semibold text-white">{customer.name}</p>
+                            <p className="font-semibold text-white">{customer.firstName} {customer.lastName}</p>
                           </div>
-                          <button onClick={() => handleDeleteCustomer(customer)} className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-500/10 transition-colors" aria-label={`Delete ${customer.name}`}><DeleteIcon /></button>
+                          <button onClick={() => handleDeleteCustomer(customer)} className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-500/10 transition-colors" aria-label={`Delete ${customer.firstName}`}><DeleteIcon /></button>
                         </li>
                       ))}
                     </ul>
@@ -333,9 +366,24 @@ const Dashboard: React.FC = ({ user }) => {
             
             {/* Records Panel */}
             {activeCustomer && (
+              <div className="space-y-8">
+                <div className="p-4 bg-brand-secondary-dark rounded-lg shadow-lg">
+                  <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-xl font-bold text-white">Profile</h2>
+                      <button onClick={() => { setEditingCustomer(activeCustomer); setIsCustomerModalOpen(true); }} className="p-2 text-gray-400 hover:text-brand-accent rounded-full hover:bg-brand-accent/10 transition-colors" aria-label="Edit Customer Profile"><EditIcon /></button>
+                  </div>
+                  <div className="space-y-2 text-sm text-gray-300">
+                      <p><strong>Name:</strong> {activeCustomer.firstName} {activeCustomer.lastName}</p>
+                      {activeCustomer.dateOfBirth && <p><strong>DOB:</strong> {activeCustomer.dateOfBirth}</p>}
+                      {activeCustomer.gender && <p><strong>Gender:</strong> {activeCustomer.gender}</p>}
+                      {activeCustomer.heightCm && <p><strong>Height:</strong> {activeCustomer.heightCm} cm</p>}
+                      {activeCustomer.currentWeightKg && <p><strong>Weight:</strong> {activeCustomer.currentWeightKg} kg</p>}
+                  </div>
+                </div>
+
                 <div className="p-4 bg-brand-secondary-dark rounded-lg shadow-lg">
                     <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold text-white">Records for {activeCustomer.name}</h2>
+                        <h2 className="text-xl font-bold text-white">Records</h2>
                         <div className="flex gap-2">
                           <button onClick={() => setIsPrintModalOpen(true)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors duration-300">
                               <PrintIcon /><span>Print</span>
@@ -361,6 +409,7 @@ const Dashboard: React.FC = ({ user }) => {
                         }
                      </div>
                 </div>
+              </div>
             )}
         </div>
 

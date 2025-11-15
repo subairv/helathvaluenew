@@ -44,5 +44,10 @@ export interface MetricConfig {
 
 export type Customer = {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth?: string; // YYYY-MM-DD
+  gender?: 'Male' | 'Female' | 'Other';
+  heightCm?: number;
+  currentWeightKg?: number;
 };
