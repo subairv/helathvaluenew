@@ -1,0 +1,5 @@
+{
+  "name": "Health Metrics Dashboard",
+  "description": "An elegant dashboard to track key health indicators like blood sugar, lipid profile, HbA1c, and more. Values are color-coded for easy interpretation of health status (Normal, Moderate, High). Includes Google Authentication for personalized tracking.",
+  "requestFramePermissions": []
+}
