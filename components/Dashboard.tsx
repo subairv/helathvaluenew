@@ -10,7 +10,7 @@ import {
 } from '../services/firebase';
 import type { User, HealthData, HealthMetricKey, HealthRecord, Customer } from '../types';
 import { MetricStatus } from '../types';
-import { METRIC_CONFIGS } from '../constants';
+import { METRIC_CONFIGS, STATUS_COLORS } from '../constants';
 import MetricCard from './MetricCard';
 import LogoutIcon from './icons/LogoutIcon';
 import SaveIcon from './icons/SaveIcon';
@@ -19,6 +19,7 @@ import SearchIcon from './icons/SearchIcon';
 import PlusIcon from './icons/PlusIcon';
 import DeleteIcon from './icons/DeleteIcon';
 import UserIcon from './icons/UserIcon';
+import PrintIcon from './icons/PrintIcon';
 
 interface DashboardProps {
   user: User;
@@ -41,6 +42,12 @@ const Dashboard: React.FC = ({ user }) => {
   const [customerRecords, setCustomerRecords] = useState<HealthRecord[]>([]);
   const [isRecordsLoading, setIsRecordsLoading] = useState(false);
   
+  // Print Modal State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printStartDate, setPrintStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [printEndDate, setPrintEndDate] = useState(new Date().toISOString().split('T')[0]);
+
+
   // Fetch all customers for the user
   const fetchCustomers = useCallback(async () => {
     if (!user) return;
@@ -190,6 +197,85 @@ const Dashboard: React.FC = ({ user }) => {
     );
   }, [customers, customerSearchTerm]);
 
+  const generateReportHtml = (records: HealthRecord[], customer: Customer, startDate: string, endDate: string): string => {
+    const metricKeys = Object.keys(METRIC_CONFIGS) as HealthMetricKey[];
+    
+    const tableHeaders = metricKeys.map(key => `<th class="p-2 border text-sm">${METRIC_CONFIGS[key].label}</th>`).join('');
+    
+    const tableRows = records.map(record => {
+        const cells = metricKeys.map(key => {
+            const value = record[key];
+            let status = MetricStatus.Default;
+            if (value !== undefined && value !== null) {
+                status = METRIC_CONFIGS[key].ranges(value);
+            }
+            const colorClass = STATUS_COLORS[status].replace('text-', 'status-');
+            return `<td class="p-2 border text-center ${colorClass}">${value ?? '-'}</td>`;
+        }).join('');
+        return `<tr><td class="p-2 border font-semibold">${record.id}</td>${cells}</tr>`;
+    }).join('');
+
+    return `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Health Report for ${customer.name}</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                .status-green-400 { color: #4ade80; }
+                .status-yellow-400 { color: #facc15; }
+                .status-red-400 { color: #f87171; }
+                .status-gray-400 { color: #9ca3af; }
+                @media print { body { font-size: 10px; } .no-print { display: none; } }
+            </style>
+        </head>
+        <body class="p-6">
+            <h1 class="text-3xl font-bold mb-2">Health Report: ${customer.name}</h1>
+            <p class="text-gray-600 mb-4">Report for period: <strong>${startDate}</strong> to <strong>${endDate}</strong></p>
+            <p class="text-sm text-gray-500 mb-6">Generated on: ${new Date().toLocaleDateString()}</p>
+            <table class="w-full border-collapse text-left">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="p-2 border">Date</th>
+                        ${tableHeaders}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableRows}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `;
+  };
+
+  const handlePrint = () => {
+    if (!activeCustomer) return;
+
+    const filteredRecords = customerRecords.filter(record => {
+        return record.id >= printStartDate && record.id <= printEndDate;
+    }).sort((a, b) => a.id.localeCompare(b.id));
+
+    if (filteredRecords.length === 0) {
+        alert('No records found in the selected date range.');
+        return;
+    }
+
+    const reportHtml = generateReportHtml(filteredRecords, activeCustomer, printStartDate, printEndDate);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+        printWindow.document.write(reportHtml);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+             printWindow.print();
+        }, 500); // Timeout to ensure styles are loaded
+    }
+    setIsPrintModalOpen(false);
+  };
+
   const metricKeys = Object.keys(METRIC_CONFIGS) as HealthMetricKey[];
 
   return (
@@ -248,11 +334,16 @@ const Dashboard: React.FC = ({ user }) => {
             {/* Records Panel */}
             {activeCustomer && (
                 <div className="p-4 bg-brand-secondary-dark rounded-lg shadow-lg">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
                         <h2 className="text-xl font-bold text-white">Records for {activeCustomer.name}</h2>
-                        <button onClick={handleNewRecord} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors duration-300">
-                            <PlusIcon /><span>New Record</span>
-                        </button>
+                        <div className="flex gap-2">
+                          <button onClick={() => setIsPrintModalOpen(true)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors duration-300">
+                              <PrintIcon /><span>Print</span>
+                          </button>
+                          <button onClick={handleNewRecord} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors duration-300">
+                              <PlusIcon /><span>New</span>
+                          </button>
+                        </div>
                     </div>
                      <div className="max-h-72 overflow-y-auto pr-2">
                         {isRecordsLoading ? <div className="text-center py-4 text-gray-400">Loading records...</div> :
@@ -341,6 +432,30 @@ const Dashboard: React.FC = ({ user }) => {
           )}
         </div>
       </div>
+
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-brand-secondary-dark p-6 rounded-lg shadow-xl w-full max-w-md">
+                <h2 className="text-2xl font-bold mb-4">Print Report</h2>
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="startDate" className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
+                        <input id="startDate" type="date" value={printStartDate} onChange={e => setPrintStartDate(e.target.value)} className="w-full bg-gray-700 text-white p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-accent" />
+                    </div>
+                    <div>
+                        <label htmlFor="endDate" className="block text-sm font-medium text-gray-400 mb-1">End Date</label>
+                        <input id="endDate" type="date" value={printEndDate} onChange={e => setPrintEndDate(e.target.value)} className="w-full bg-gray-700 text-white p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-accent" />
+                    </div>
+                </div>
+                <div className="mt-6 flex justify-end space-x-4">
+                    <button onClick={() => setIsPrintModalOpen(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
+                    <button onClick={handlePrint} className="bg-brand-accent hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                        <PrintIcon /><span>Print</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
