@@ -41,3 +41,8 @@ export interface MetricConfig {
   unit: string;
   ranges: (value: number) => MetricStatus;
 }
+
+export type Customer = {
+  id: string;
+  name: string;
+};
