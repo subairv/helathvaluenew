@@ -466,7 +466,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     </div>
                      <div className="max-h-72 overflow-y-auto pr-2">
                         {isRecordsLoading ? <div className="text-center py-4 text-gray-400">Loading records...</div> :
-                         customerRecords.length === 0 ? <div className="text-center py-4 text-gray-400">No records found.</div> :
+                         customerRecords.length === 0 ? <div className="text-center py-4 text-gray-400">No records found. <br /> Click 'New' to create one.</div> :
                          <ul className="space-y-2">
                             {customerRecords.map(record => (
                                 <li key={record.id} className={`p-3 rounded-lg flex justify-between items-center transition-colors ${selectedDate === record.id ? 'bg-brand-accent/30' : 'bg-gray-700 hover:bg-gray-600'}`}>
