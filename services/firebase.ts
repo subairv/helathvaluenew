@@ -97,7 +97,12 @@ export const saveHealthData = async (userId: string, customerId: string, date: s
         if (data.height !== undefined) {
             customerUpdate.heightCm = data.height;
         }
-        batch.update(customerDocRef, customerUpdate);
+        
+        // Firestore update operations require at least one field.
+        // An empty update object will throw an error.
+        if (Object.keys(customerUpdate).length > 0) {
+            batch.update(customerDocRef, customerUpdate);
+        }
     }
     
     await batch.commit();
