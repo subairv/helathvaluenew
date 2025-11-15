@@ -32,6 +32,10 @@ export type HealthData = {
   lastUpdated?: string;
 };
 
+export type HealthRecord = HealthData & {
+  id: string; // The date string YYYY-MM-DD
+};
+
 export interface MetricConfig {
   label: string;
   unit: string;

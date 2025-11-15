@@ -6,9 +6,9 @@ import {
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc } from "firebase/firestore";
 import type { Auth } from "firebase/auth";
-import type { HealthData } from "../types";
+import type { HealthData, HealthRecord } from "../types";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCoX4RT3aJW-frI0y-Re8anJ27iMxdZpmE",
@@ -43,6 +43,22 @@ export const getHealthDataForDate = async (userId: string, date: string): Promis
   const docRef = doc(db, 'users', userId, 'healthRecords', date);
   const docSnap = await getDoc(docRef);
   return docSnap.exists() ? (docSnap.data() as HealthData) : null;
+};
+
+export const getAllHealthRecords = async (userId: string): Promise<HealthRecord[]> => {
+  const recordsColRef = collection(db, 'users', userId, 'healthRecords');
+  const q = query(recordsColRef, orderBy('__name__', 'desc')); // Order by document ID (date) descending
+  const querySnapshot = await getDocs(q);
+  const records: HealthRecord[] = [];
+  querySnapshot.forEach((doc) => {
+    records.push({ id: doc.id, ...doc.data() } as HealthRecord);
+  });
+  return records;
+};
+
+export const deleteHealthRecord = async (userId: string, date: string): Promise<void> => {
+    const docRef = doc(db, 'users', userId, 'healthRecords', date);
+    await deleteDoc(docRef);
 };
 
 
