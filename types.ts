@@ -1,4 +1,3 @@
-
 import type { User as FirebaseUser } from "firebase/auth";
 
 export type User = FirebaseUser;
@@ -26,6 +25,11 @@ export type HealthMetricKey =
 
 export type HealthData = {
   [key in HealthMetricKey]?: number;
+} & {
+  customerName?: string;
+  height?: number; // in cm
+  weight?: number; // in kg
+  lastUpdated?: string;
 };
 
 export interface MetricConfig {

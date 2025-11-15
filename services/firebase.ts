@@ -1,4 +1,3 @@
-
 import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
@@ -7,7 +6,9 @@ import {
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
+import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
 import type { Auth } from "firebase/auth";
+import type { HealthData } from "../types";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCoX4RT3aJW-frI0y-Re8anJ27iMxdZpmE",
@@ -20,6 +21,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth: Auth = getAuth(app);
+const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
 export const signInWithGoogle = (): Promise<void> => {
@@ -31,5 +33,17 @@ export const signInWithGoogle = (): Promise<void> => {
 export const signOutUser = (): Promise<void> => {
   return signOut(auth);
 };
+
+export const saveHealthData = async (userId: string, date: string, data: HealthData): Promise<void> => {
+  const docRef = doc(db, 'users', userId, 'healthRecords', date);
+  await setDoc(docRef, data, { merge: true });
+};
+
+export const getHealthDataForDate = async (userId: string, date: string): Promise<HealthData | null> => {
+  const docRef = doc(db, 'users', userId, 'healthRecords', date);
+  const docSnap = await getDoc(docRef);
+  return docSnap.exists() ? (docSnap.data() as HealthData) : null;
+};
+
 
 export { onAuthStateChanged };
