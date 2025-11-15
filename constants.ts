@@ -12,6 +12,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v <= 125) return MetricStatus.Moderate;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 1000,
   },
   ppbs: {
     label: 'Postprandial Sugar',
@@ -21,6 +23,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v <= 199) return MetricStatus.Moderate;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 1000,
   },
   totalCholesterol: {
     label: 'Total Cholesterol',
@@ -30,6 +34,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v < 240) return MetricStatus.Moderate;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 500,
   },
   triglycerides: {
     label: 'Triglycerides',
@@ -39,6 +45,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v < 200) return MetricStatus.Moderate;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 1000,
   },
   hdl: {
     label: 'HDL Cholesterol',
@@ -48,6 +56,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v >= 40) return MetricStatus.Moderate;
       return MetricStatus.Low; // Low is bad for HDL
     },
+    min: 0,
+    max: 200,
   },
   ldl: {
     label: 'LDL Cholesterol',
@@ -57,6 +67,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v < 130) return MetricStatus.Moderate;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 500,
   },
   hba1c: {
     label: 'HbA1c',
@@ -66,6 +78,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v < 6.5) return MetricStatus.Moderate;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 20,
   },
   psa: {
     label: 'PSA',
@@ -75,6 +89,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v <= 10.0) return MetricStatus.Moderate;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 100,
   },
   creatinine: {
     label: 'Creatinine',
@@ -84,6 +100,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v < 0.74) return MetricStatus.Low;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 10,
   },
   microalbumin: {
     label: 'Microalbumin',
@@ -93,6 +111,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v <= 300) return MetricStatus.Moderate;
       return MetricStatus.High;
     },
+    min: 0,
+    max: 500,
   },
   bmi: {
     label: 'BMI',
@@ -103,6 +123,8 @@ export const METRIC_CONFIGS: Record<HealthMetricKey, MetricConfig> = {
       if (v < 30) return MetricStatus.Moderate; // Overweight
       return MetricStatus.High; // Obese
     },
+    min: 0,
+    max: 100,
   },
 };
 

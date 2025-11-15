@@ -51,6 +51,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [printStartDate, setPrintStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [printEndDate, setPrintEndDate] = useState(new Date().toISOString().split('T')[0]);
 
+  // Input validation state
+  const [heightInput, setHeightInput] = useState(formData.height === undefined ? '' : String(formData.height));
+  const [weightInput, setWeightInput] = useState(formData.weight === undefined ? '' : String(formData.weight));
+  const [heightError, setHeightError] = useState<string|null>(null);
+  const [weightError, setWeightError] = useState<string|null>(null);
+
 
   // Fetch all customers for the user
   const fetchCustomers = useCallback(async (newlySelectedId: string | null = null) => {
@@ -103,6 +109,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
          });
     }
   }, [selectedDate, customerRecords, activeCustomer]);
+
+    // Sync validation inputs when formData changes from outside
+    useEffect(() => {
+        const newHeightStr = formData.height === undefined ? '' : String(formData.height);
+        if (parseFloat(heightInput) !== formData.height) {
+            setHeightInput(newHeightStr);
+            if (heightError) validateHeight(newHeightStr);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.height]);
+
+    useEffect(() => {
+        const newWeightStr = formData.weight === undefined ? '' : String(formData.weight);
+        if (parseFloat(weightInput) !== formData.weight) {
+            setWeightInput(newWeightStr);
+            if (weightError) validateWeight(newWeightStr);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.weight]);
+
   
   const bmi = useMemo(() => {
     const { weight, height } = formData;
@@ -124,6 +150,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const handleSave = async () => {
     if (!user || !activeCustomer) return;
+
+    // Check for validation errors before saving
+    if (heightError || weightError) {
+        alert("Please fix the errors before saving.");
+        return;
+    }
+
     setIsSaving(true);
     
     const dataToSave: HealthData = {
@@ -302,6 +335,44 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     }
     setIsPrintModalOpen(false);
   };
+  
+    const validateHeight = (val: string): boolean => {
+        if (val === '') { setHeightError(null); return true; }
+        const num = parseFloat(val);
+        if (isNaN(num) || num <= 0 || num > 300) {
+            setHeightError('Height must be > 0 and < 300 cm.');
+            return false;
+        }
+        setHeightError(null);
+        return true;
+    };
+
+    const validateWeight = (val: string): boolean => {
+        if (val === '') { setWeightError(null); return true; }
+        const num = parseFloat(val);
+        if (isNaN(num) || num <= 0 || num > 500) {
+            setWeightError('Weight must be > 0 and < 500 kg.');
+            return false;
+        }
+        setWeightError(null);
+        return true;
+    };
+
+    const handleHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setHeightInput(val);
+        if (validateHeight(val)) {
+            handleFormChange('height', val === '' ? undefined : parseFloat(val));
+        }
+    };
+
+    const handleWeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setWeightInput(val);
+        if (validateWeight(val)) {
+            handleFormChange('weight', val === '' ? undefined : parseFloat(val));
+        }
+    };
 
   const metricKeys = Object.keys(METRIC_CONFIGS) as HealthMetricKey[];
 
@@ -446,15 +517,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <div className="bg-brand-secondary-dark p-4 rounded-lg shadow-lg">
                     <h3 className="font-bold text-gray-200 mb-2">BMI Calculator</h3>
                     <div className="space-y-4">
-                      <div className="relative">
+                      <div>
                           <label htmlFor="height" className="block text-sm font-medium text-gray-400 mb-1">Height</label>
-                          <input id="height" type="number" value={formData.height ?? ''} onChange={(e) => handleFormChange('height', e.target.value === '' ? undefined : parseFloat(e.target.value))} placeholder="-" className="w-full bg-gray-700 text-white p-2 rounded-md text-2xl font-mono focus:outline-none focus:ring-2 focus:ring-brand-accent" />
-                          <span className="absolute right-3 bottom-3 text-gray-400">cm</span>
+                          <div className="relative">
+                              <input id="height" type="number" value={heightInput} onChange={handleHeightChange} placeholder="-" className={`w-full bg-gray-700 text-white p-2 rounded-md text-2xl font-mono focus:outline-none focus:ring-2 ${heightError ? 'ring-2 ring-red-500 focus:ring-red-500' : 'focus:ring-brand-accent'}`} />
+                              <span className="absolute right-3 bottom-3 text-gray-400">cm</span>
+                          </div>
+                          {heightError && <p className="text-red-500 text-xs mt-1">{heightError}</p>}
                       </div>
-                      <div className="relative">
+                      <div>
                           <label htmlFor="weight" className="block text-sm font-medium text-gray-400 mb-1">Weight</label>
-                          <input id="weight" type="number" value={formData.weight ?? ''} onChange={(e) => handleFormChange('weight', e.target.value === '' ? undefined : parseFloat(e.target.value))} placeholder="-" className="w-full bg-gray-700 text-white p-2 rounded-md text-2xl font-mono focus:outline-none focus:ring-2 focus:ring-brand-accent" />
-                          <span className="absolute right-3 bottom-3 text-gray-400">kg</span>
+                          <div className="relative">
+                              <input id="weight" type="number" value={weightInput} onChange={handleWeightChange} placeholder="-" className={`w-full bg-gray-700 text-white p-2 rounded-md text-2xl font-mono focus:outline-none focus:ring-2 ${weightError ? 'ring-2 ring-red-500 focus:ring-red-500' : 'focus:ring-brand-accent'}`} />
+                              <span className="absolute right-3 bottom-3 text-gray-400">kg</span>
+                          </div>
+                          {weightError && <p className="text-red-500 text-xs mt-1">{weightError}</p>}
                       </div>
                     </div>
                 </div>
@@ -473,6 +550,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             status={status}
                             onChange={(val) => handleMetricChange(key, val)}
                             isReadOnly={key === 'bmi'}
+                            min={config.min}
+                            max={config.max}
                         />
                     );
                 })}

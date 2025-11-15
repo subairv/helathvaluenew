@@ -40,6 +40,8 @@ export interface MetricConfig {
   label: string;
   unit: string;
   ranges: (value: number) => MetricStatus;
+  min?: number;
+  max?: number;
 }
 
 export type Customer = {
